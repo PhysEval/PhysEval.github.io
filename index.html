@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PhysEval — Simulation-Grounded Evaluation of Physical Realism in Video Generation</title>
+<meta name="description" content="PhysEval measures whether the motion in generated video obeys physics — scored against an exact, simulated ground-truth trajectory with no human and no judge in the loop. Metric: TPA (Trajectory–Physics Alignment). A research program by Ray (Zerui) Wang, Ph.D.">
+<meta name="theme-color" content="#0b0e18">
+<meta property="og:title" content="PhysEval — Simulation-Grounded Evaluation of Physical Realism in Video Generation">
+<meta property="og:description" content="Measuring whether generated motion obeys physics, against an exact simulated trajectory. Metric: TPA. A research program by Ray (Zerui) Wang, Ph.D.">
+<meta property="og:type" content="website">
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  :root{
+    --serif:'Charter','Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif;
+    --sans:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,system-ui,sans-serif;
+    --mono:'SF Mono','JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+
+    --ink:#10131c; --ink-soft:#39425a; --muted:#697288; --faint:#9aa1b4;
+    --line:#e7e9f1; --bg:#ffffff; --bg-soft:#f6f8fc; --bg-softer:#eef1f9;
+
+    --accent:#3457d5; --accent-ink:#243a93; --accent-soft:#eef1ff; --accent-2:#dd7a1c;
+
+    --hero-bg:#0b0e18; --hero-ink:#eef1fb; --hero-muted:#9aa3bd; --hero-line:rgba(255,255,255,.10);
+    --ref:#8298ff; --gen:#ffb454;
+
+    --r:16px; --r-sm:11px;
+    --shadow:0 1px 2px rgba(16,19,28,.04),0 8px 30px rgba(16,19,28,.06);
+    --maxw:1080px;
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;font-family:var(--sans);color:var(--ink);background:var(--bg);
+    line-height:1.65;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  }
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .container{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+  section{scroll-margin-top:74px}
+  .mono{font-family:var(--mono)}
+  em{font-style:italic}
+
+  /* ---------- nav ---------- */
+  .nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.82);
+    backdrop-filter:saturate(180%) blur(12px);-webkit-backdrop-filter:saturate(180%) blur(12px);
+    border-bottom:1px solid var(--line)}
+  .nav-inner{max-width:var(--maxw);margin:0 auto;padding:11px 24px;display:flex;align-items:center;gap:18px}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:18px;color:var(--ink);letter-spacing:-.01em}
+  .brand:hover{text-decoration:none}
+  .brand svg{width:22px;height:22px;display:block}
+  .brand-accent{color:var(--accent)}
+  .nav-links{display:flex;gap:22px;margin-left:auto;font-size:14.5px}
+  .nav-links a{color:var(--ink-soft);font-weight:500}
+  .nav-links a:hover{color:var(--accent);text-decoration:none}
+  .nav-links a.active{color:var(--accent)}
+  .nav-cta{margin-left:8px;padding:8px 16px;border-radius:999px;background:var(--ink);color:#fff;
+    font-size:14px;font-weight:600}
+  .nav-cta:hover{background:var(--accent);text-decoration:none}
+  @media(max-width:860px){.nav-links{display:none}.nav-cta{margin-left:auto}}
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;background:var(--hero-bg);color:var(--hero-ink);overflow:hidden;
+    border-bottom:1px solid #000}
+  .hero-dots{position:absolute;inset:0;
+    background-image:radial-gradient(circle at center,rgba(255,255,255,.05) 1px,transparent 1.4px);
+    background-size:23px 23px;-webkit-mask-image:linear-gradient(180deg,#000 35%,transparent);
+    mask-image:linear-gradient(180deg,#000 35%,transparent)}
+  .hero-glow{position:absolute;top:-120px;right:-80px;width:520px;height:520px;border-radius:50%;
+    background:radial-gradient(circle,rgba(52,87,213,.30),transparent 62%);filter:blur(8px);pointer-events:none}
+  .hero-inner{position:relative;display:grid;grid-template-columns:1.05fr .95fr;gap:50px;align-items:center;
+    padding:78px 24px 84px}
+  @media(max-width:880px){.hero-inner{grid-template-columns:1fr;gap:34px;padding:56px 24px 60px}}
+  .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ref);margin:0 0 14px}
+  .hero-title{font-family:var(--serif);font-weight:700;font-size:clamp(54px,9vw,92px);line-height:.96;
+    letter-spacing:-.02em;margin:0 0 18px}
+  .hero-title .dot{color:var(--accent)}
+  .hero-sub{font-size:clamp(17px,2.3vw,20.5px);color:#cdd3e6;max-width:30em;margin:0 0 22px}
+  .hero-sub em{color:#fff;font-style:italic}
+  .metric-chip{display:inline-flex;align-items:center;gap:10px;font-size:14.5px;color:#dfe4f5;
+    border:1px solid var(--hero-line);background:rgba(255,255,255,.03);padding:8px 14px;border-radius:999px;margin-bottom:20px}
+  .metric-chip .mono{font-size:11.5px;letter-spacing:.12em;color:var(--ref);background:rgba(130,152,255,.12);
+    padding:3px 8px;border-radius:6px}
+  .hero-tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:26px}
+  .tag{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--hero-muted);
+    border:1px solid var(--hero-line);border-radius:6px;padding:5px 9px}
+  .hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:12px 20px;border-radius:999px;font-weight:600;
+    font-size:15px;transition:transform .15s ease,background .15s ease,border-color .15s ease}
+  .btn:hover{text-decoration:none;transform:translateY(-1px)}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:hover{background:#4566e6}
+  .btn-ghost{border:1px solid var(--hero-line);color:#e7eaf6}
+  .btn-ghost:hover{border-color:#5a6aa8;background:rgba(255,255,255,.04)}
+  .byline{font-size:14.5px;color:var(--hero-muted);margin:8px 0 0}
+  .byline a{color:#cdd3e6;border-bottom:1px dashed rgba(255,255,255,.28)}
+  .byline a:hover{color:#fff;text-decoration:none}
+
+  /* hero figure */
+  .hero-figure{position:relative}
+  .hero-figure svg{width:100%;height:auto;display:block;
+    filter:drop-shadow(0 10px 30px rgba(0,0,0,.4))}
+  .figure-card{border:1px solid var(--hero-line);border-radius:var(--r);background:rgba(255,255,255,.025);
+    padding:16px 16px 14px}
+  .legend{display:flex;flex-wrap:wrap;gap:18px;margin:12px 2px 0;font-size:12.5px;color:#c2c9e0}
+  .legend i{display:inline-block;width:22px;height:0;border-top:3px solid;vertical-align:middle;margin-right:7px}
+  .legend .ref-text{color:var(--ref)} .legend .gen-text{color:var(--gen)}
+  .figure-cap{font-size:13px;color:var(--hero-muted);margin:12px 2px 0;line-height:1.5}
+  .ref-text{color:var(--ref)} .gen-text{color:var(--gen)}
+
+  /* ---------- generic section ---------- */
+  .band{padding:78px 0}
+  .band.soft{background:var(--bg-soft);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .kicker{font-family:var(--mono);font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 14px}
+  .h2{font-family:var(--serif);font-size:clamp(30px,4.4vw,42px);line-height:1.1;letter-spacing:-.018em;margin:0 0 16px;font-weight:700}
+  .lead{font-size:18.5px;color:var(--ink-soft);max-width:46em;margin:0 0 18px}
+  .prose p{color:var(--ink-soft);max-width:46em;margin:0 0 16px}
+  .prose strong{color:var(--ink)}
+  .small-note{font-size:13.5px;color:var(--muted)}
+
+  /* stat blocks */
+  .stat-row{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:30px 0 8px}
+  @media(max-width:680px){.stat-row{grid-template-columns:1fr}}
+  .stat{border:1px solid var(--line);border-radius:var(--r);padding:24px;background:#fff;box-shadow:var(--shadow)}
+  .stat .num{font-family:var(--serif);font-size:clamp(34px,5vw,46px);font-weight:700;letter-spacing:-.02em;color:var(--ink);line-height:1}
+  .stat .num span{color:var(--accent-2)}
+  .stat .desc{margin-top:10px;color:var(--ink-soft);font-size:15px}
+  .cite{font-size:12.5px;color:var(--muted);font-family:var(--mono);margin-top:14px}
+
+  /* pull quote */
+  .pull{border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 var(--r) var(--r) 0;
+    padding:22px 26px;margin:26px 0;font-family:var(--serif);font-size:21px;line-height:1.4;color:var(--accent-ink)}
+
+  /* cards grid */
+  .grid{display:grid;gap:18px}
+  .grid.two{grid-template-columns:1fr 1fr}
+  .grid.three{grid-template-columns:repeat(3,1fr)}
+  .grid.four{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:880px){.grid.three,.grid.four{grid-template-columns:1fr 1fr}}
+  @media(max-width:620px){.grid.two,.grid.three,.grid.four{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);border-radius:var(--r);padding:22px;background:#fff;box-shadow:var(--shadow)}
+  .card .ix{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.1em}
+  .card h3{font-size:17px;margin:8px 0 7px;letter-spacing:-.01em}
+  .card p{margin:0;color:var(--ink-soft);font-size:14.5px}
+  .card .pin{font-family:var(--mono);font-size:12px;color:var(--muted)}
+
+  /* pipeline */
+  .pipe{display:flex;flex-wrap:wrap;align-items:stretch;gap:0;margin:26px 0 8px}
+  .pstep{flex:1 1 150px;min-width:140px;border:1px solid var(--line);background:#fff;border-radius:var(--r-sm);
+    padding:15px 16px;box-shadow:var(--shadow);position:relative;margin:6px}
+  .pstep .n{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.1em}
+  .pstep b{display:block;font-size:14.5px;margin:5px 0 3px;letter-spacing:-.01em}
+  .pstep span{font-size:12.5px;color:var(--muted)}
+  .pstep.final{border-color:var(--accent);background:var(--accent-soft)}
+  .pstep.final b{color:var(--accent-ink)}
+  .pipe .arrow{align-self:center;color:var(--faint);font-size:20px;padding:0 2px}
+  @media(max-width:620px){.pipe .arrow{transform:rotate(90deg)}}
+
+  .props{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+  .prop{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--line);background:#fff;
+    border-radius:999px;padding:9px 16px;font-size:14px;font-weight:600;box-shadow:var(--shadow)}
+  .prop b{color:var(--accent)}
+
+  /* chips */
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin:22px 0}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:9px 16px;font-size:14px;box-shadow:var(--shadow)}
+  .chip b{font-family:var(--serif);font-size:16px;color:var(--accent);margin-right:4px}
+
+  /* table */
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);margin:26px 0 10px}
+  table{border-collapse:collapse;width:100%;min-width:680px;font-size:14.5px;background:#fff}
+  thead th{text-align:left;padding:16px 18px;font-size:13px;letter-spacing:.02em;background:var(--bg-softer);
+    color:var(--ink);border-bottom:1px solid var(--line);vertical-align:bottom}
+  thead th.us{background:var(--accent);color:#fff}
+  tbody th{text-align:left;padding:14px 18px;font-weight:600;color:var(--ink);background:var(--bg-soft);
+    border-bottom:1px solid var(--line);white-space:nowrap}
+  tbody td{padding:14px 18px;color:var(--ink-soft);border-bottom:1px solid var(--line);vertical-align:top}
+  tbody td.us{background:#f4f6ff;color:var(--ink);border-left:1px solid var(--accent);border-right:1px solid var(--accent)}
+  tbody tr:last-child td.us{border-bottom:1px solid var(--accent)}
+  .oneliner{font-family:var(--serif);font-size:20px;line-height:1.45;color:var(--ink);margin:24px 0 0;max-width:50em}
+  .oneliner b{color:var(--accent)}
+
+  /* roadmap */
+  .road{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){.road{grid-template-columns:1fr}}
+  .road .card{display:flex;gap:16px}
+  .road .num{font-family:var(--serif);font-size:30px;font-weight:700;color:var(--accent);line-height:1;min-width:38px}
+
+  /* researcher */
+  .who{display:grid;grid-template-columns:1.4fr 1fr;gap:34px;align-items:start}
+  @media(max-width:820px){.who{grid-template-columns:1fr;gap:22px}}
+  .who .name{font-family:var(--serif);font-size:34px;font-weight:700;letter-spacing:-.02em;margin:0}
+  .who .role{font-family:var(--mono);font-size:13px;letter-spacing:.04em;color:var(--accent);margin:6px 0 16px;text-transform:uppercase}
+  .badges{display:flex;flex-direction:column;gap:10px}
+  .badge{border:1px solid var(--line);border-radius:var(--r-sm);padding:14px 16px;background:#fff;box-shadow:var(--shadow)}
+  .badge .b-num{font-family:var(--serif);font-size:24px;font-weight:700;color:var(--ink);line-height:1}
+  .badge .b-l{font-size:13px;color:var(--muted);margin-top:3px}
+
+  .pillars{margin-top:18px}
+  .pillar h3{font-size:16.5px;margin:0 0 6px;letter-spacing:-.01em}
+  .pillar .need{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:8px}
+  .pillar p{font-size:14px}
+
+  .timeline{margin:8px 0 0;padding:0;list-style:none}
+  .timeline li{display:grid;grid-template-columns:170px 1fr;gap:18px;padding:16px 0;border-bottom:1px solid var(--line)}
+  .timeline li:last-child{border-bottom:none}
+  .timeline .when{font-family:var(--mono);font-size:12.5px;color:var(--muted);padding-top:2px}
+  .timeline .what b{display:block;font-size:15.5px;letter-spacing:-.01em}
+  .timeline .what .org{color:var(--accent);font-weight:600}
+  .timeline .what p{margin:5px 0 0;font-size:14px;color:var(--ink-soft)}
+  @media(max-width:620px){.timeline li{grid-template-columns:1fr;gap:4px}}
+
+  .pubs{margin:8px 0 0;padding:0;list-style:none}
+  .pubs li{padding:13px 0;border-bottom:1px solid var(--line);font-size:14.5px;color:var(--ink-soft)}
+  .pubs li:last-child{border-bottom:none}
+  .pubs b{color:var(--ink)} .pubs .venue{color:var(--accent);font-style:italic}
+
+  .edu{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px}
+  @media(max-width:760px){.edu{grid-template-columns:1fr}}
+  .edu .card .deg{font-weight:700;font-size:15.5px}
+  .edu .card .sch{color:var(--accent);font-size:14px;margin-top:2px}
+  .edu .card .yr{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:4px}
+
+  /* contact */
+  .contact{background:var(--hero-bg);color:var(--hero-ink);position:relative;overflow:hidden}
+  .contact .hero-dots{-webkit-mask-image:linear-gradient(180deg,#000,transparent 80%);mask-image:linear-gradient(180deg,#000,transparent 80%)}
+  .contact .kicker{color:var(--ref)}
+  .contact h2{font-family:var(--serif);font-size:clamp(30px,4.4vw,42px);margin:0 0 14px;letter-spacing:-.018em}
+  .contact .lead{color:#cdd3e6;max-width:42em}
+  .contact-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:30px 0 6px;max-width:760px}
+  @media(max-width:620px){.contact-grid{grid-template-columns:1fr}}
+  .cc{display:flex;align-items:center;gap:14px;border:1px solid var(--hero-line);border-radius:var(--r-sm);
+    padding:16px 18px;background:rgba(255,255,255,.025);color:#e7eaf6}
+  .cc:hover{text-decoration:none;border-color:#5a6aa8;background:rgba(255,255,255,.05)}
+  .cc .ic{width:38px;height:38px;border-radius:9px;background:rgba(130,152,255,.14);display:grid;place-items:center;color:var(--ref);flex:none}
+  .cc .ic svg{width:19px;height:19px}
+  .cc .l{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--hero-muted)}
+  .cc .v{font-size:15px;font-weight:600;word-break:break-word}
+  .avail{display:inline-flex;align-items:center;gap:9px;margin-top:24px;font-size:14.5px;color:#cdd3e6;
+    border:1px solid var(--hero-line);border-radius:999px;padding:9px 16px}
+  .avail .dot{width:9px;height:9px;border-radius:50%;background:#39d98a;box-shadow:0 0 0 4px rgba(57,217,138,.18)}
+
+  /* footer */
+  footer{padding:34px 0;border-top:1px solid #000;background:#070a12;color:var(--hero-muted);font-size:13.5px}
+  .foot-inner{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center}
+  footer a{color:#c2c9e0}
+  .foot-links{display:flex;gap:18px;flex-wrap:wrap}
+
+  /* reveal */
+  .reveal{opacity:1}
+  html.js .reveal{opacity:0;transform:translateY(18px);transition:opacity .65s cubic-bezier(.2,.7,.2,1),transform .65s cubic-bezier(.2,.7,.2,1)}
+  html.js .reveal.in{opacity:1;transform:none}
+  @media(prefers-reduced-motion:reduce){html.js .reveal{opacity:1;transform:none;transition:none}}
+</style>
+</head>
+<body id="top">
+
+<!-- ===================== NAV ===================== -->
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top" aria-label="PhysEval home">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M2 20 Q12 -2 22 20" stroke="#3457d5" stroke-width="2.2" stroke-linecap="round"/>
+        <circle cx="12" cy="9" r="2" fill="#dd7a1c"/>
+      </svg>
+      Phys<span class="brand-accent">Eval</span>
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#problem">Problem</a>
+      <a href="#approach">Approach</a>
+      <a href="#method">Method</a>
+      <a href="#benchmark">Benchmark</a>
+      <a href="#paradigms">Paradigms</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#researcher">Researcher</a>
+    </nav>
+    <a class="nav-cta" href="#contact">Contact</a>
+  </div>
+</header>
+
+<!-- ===================== HERO ===================== -->
+<section class="hero">
+  <div class="hero-dots" aria-hidden="true"></div>
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="hero-inner container">
+    <div class="hero-copy reveal">
+      <p class="eyebrow">Simulation-Grounded · Trajectory-Level Evaluation</p>
+      <h1 class="hero-title">PhysEval<span class="dot">.</span></h1>
+      <p class="hero-sub">Measuring whether the <em>motion</em> in generated video obeys physics — scored against an exact, <em>simulated</em> ground-truth trajectory, with no human and no judge in the loop.</p>
+      <div class="metric-chip"><span class="mono">METRIC</span> TPA — Trajectory–Physics Alignment</div>
+      <div class="hero-tags">
+        <span class="tag">SIM-GROUNDED</span>
+        <span class="tag">TRAJECTORY-LEVEL</span>
+        <span class="tag">NO JUDGE IN THE LOOP</span>
+        <span class="tag">FULLY REPRODUCIBLE</span>
+      </div>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#approach">How it works ↓</a>
+        <a class="btn btn-ghost" href="#researcher">The researcher</a>
+        <a class="btn btn-ghost" href="#contact">Get in touch</a>
+      </div>
+      <p class="byline">A research program by <a href="#researcher">Ray (Zerui) Wang, Ph.D.</a></p>
+    </div>
+
+    <div class="hero-figure reveal">
+      <div class="figure-card">
+        <svg viewBox="0 0 640 330" role="img" aria-label="A simulated reference parabola and a diverging generated trajectory, with the gap labelled delta.">
+          <!-- ground -->
+          <line x1="40" y1="300" x2="610" y2="300" stroke="rgba(255,255,255,.18)" stroke-width="1.5"/>
+          <!-- launch point -->
+          <circle cx="70" cy="300" r="4" fill="#cdd3e6"/>
+          <!-- reference trajectory tau* -->
+          <path d="M70 300 Q320 -110 570 300" fill="none" stroke="#8298ff" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="320" cy="95" r="4.5" fill="#8298ff"/>
+          <!-- generated trajectory tau-hat -->
+          <path d="M70 300 Q360 -190 600 250" fill="none" stroke="#ffb454" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 9"/>
+          <!-- delta marker at x=515: ref y~220, gen y~125 -->
+          <line x1="515" y1="125" x2="515" y2="220" stroke="rgba(255,255,255,.55)" stroke-width="1.3" stroke-dasharray="3 4"/>
+          <path d="M511 130 l4 -7 l4 7" fill="rgba(255,255,255,.7)"/>
+          <path d="M511 215 l4 7 l4 -7" fill="rgba(255,255,255,.7)"/>
+          <text x="525" y="178" fill="#eef1fb" font-family="monospace" font-size="15" font-style="italic">Δ</text>
+          <text x="540" y="178" fill="#9aa3bd" font-family="monospace" font-size="11">= TPA</text>
+        </svg>
+        <div class="legend">
+          <span><i style="border-color:var(--ref)"></i><span class="ref-text">τ*</span> simulated reference</span>
+          <span><i style="border-color:var(--gen);border-top-style:dashed"></i><span class="gen-text">τ̂</span> generated (recovered)</span>
+        </div>
+      </div>
+      <p class="figure-cap">A clip can be pixel-perfect yet physically wrong — here the generated object <em>floats</em> under miscalibrated gravity. PhysEval scores the gap <span class="mono">Δ</span> between the recovered trajectory <span class="gen-text">τ̂</span> and the simulator's exact reference <span class="ref-text">τ*</span>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== PROBLEM ===================== -->
+<section id="problem" class="band">
+  <div class="container">
+    <p class="kicker reveal">The problem</p>
+    <h2 class="h2 reveal">Visual realism is not physical realism.</h2>
+    <div class="prose reveal">
+      <p>Text-to-video models now synthesize multi-second clips with convincing texture, lighting, and camera movement — and the field increasingly treats them as emerging <strong>world models</strong> for planning, robotics, and simulation. That ambition hinges on a property the eye does not verify directly: <strong>the motion must obey the laws of physics.</strong> A clip can be pixel-perfect while a ball drifts upward, a collision conjures momentum from nothing, or a pendulum swings at the wrong period.</p>
+    </div>
+
+    <div class="stat-row reveal">
+      <div class="stat">
+        <div class="num">83.3% <span>/</span> 93.5%</div>
+        <div class="desc">of clips from leading models contain at least one <strong>human-visible physical glitch</strong> (exocentric / egocentric). The problem is far from solved.</div>
+        <div class="cite">— reported by Physion-Eval, CVPR 2026</div>
+      </div>
+      <div class="stat">
+        <div class="num">74<span>–</span>90%</div>
+        <div class="desc">of those obvious glitches are <strong>missed by the strongest MLLM critic</strong> (Gemini&nbsp;3.0&nbsp;Pro). Building evaluation on VLM judges rests on shaky ground.</div>
+        <div class="cite">— reported by Physion-Eval, CVPR 2026</div>
+      </div>
+    </div>
+
+    <div class="prose reveal">
+      <p>Our ability to <em>improve</em> physical realism is bounded by our ability to <em>measure</em> it — and today's measurements are indirect. Human studies are slow, costly, and subjective; a single verdict fuses three separate questions (did the right objects appear, was the render clean, was the motion correct). MLLM critics promised scale but track objects poorly and reason weakly about contact. Both share a deeper flaw: <strong>they compare a video to a <em>textual</em> description or a human impression — never to a numerical statement of what the physics should have been.</strong></p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== APPROACH ===================== -->
+<section id="approach" class="band soft">
+  <div class="container">
+    <p class="kicker reveal">The core idea</p>
+    <h2 class="h2 reveal">Invert the protocol: author the scene in a simulator.</h2>
+    <p class="lead reveal">Physical realism is, operationally, a claim about <strong>trajectories</strong> — the path, speed, and timing of moving objects. If the correct trajectory is known, a clip's departure from it can be measured directly, objectively, and on a continuous scale. A physics engine supplies that trajectory for free.</p>
+
+    <div class="pull reveal">Rather than describe a scene in words and ask whether the video looks right, we author the scene <em>inside a physics engine</em>, render the same specification into a prompt, and ask whether the generated motion follows the trajectory the simulator computed.</div>
+
+    <div class="grid two reveal">
+      <div class="card">
+        <span class="ix">GUARANTEE 01</span>
+        <h3>Certified realizability</h3>
+        <p>Every prompted situation provably admits a physical solution — so a failing model cannot hide behind an ill-posed task. Even an <em>impossible</em> prompt gets a quantitative target, via a simulated <strong>counterfactual</strong>.</p>
+      </div>
+      <div class="card">
+        <span class="ix">GUARANTEE 02</span>
+        <h3>Exact reference trajectory <span class="mono">τ*</span></h3>
+        <p>The simulator exports the precise trajectory of every moving body, together with the <strong>governing law</strong> and the parameters that produced it. Evaluation becomes a well-posed registration-and-comparison problem — not a proxy, an invariant check, or another learned opinion.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== METHOD ===================== -->
+<section id="method" class="band">
+  <div class="container">
+    <p class="kicker reveal">The metric — TPA</p>
+    <h2 class="h2 reveal">Recover the trajectory, register it, score the gap.</h2>
+    <p class="lead reveal">Scoring a generated clip is a problem of trajectory recovery and comparison. The pipeline localizes the moving object, follows it through pans and zooms, registers the recovered path to the simulated reference, and reads out a single objective number.</p>
+
+    <div class="pipe reveal">
+      <div class="pstep"><span class="n">01</span><b>Promptable segmentation</b><span>gated by motion saliency</span></div>
+      <span class="arrow">→</span>
+      <div class="pstep"><span class="n">02</span><b>Camera-motion compensation</b><span>remove model pans &amp; zooms</span></div>
+      <span class="arrow">→</span>
+      <div class="pstep"><span class="n">03</span><b>Dense point tracking</b><span>recover image-space τ̂</span></div>
+      <span class="arrow">→</span>
+      <div class="pstep"><span class="n">04</span><b>Restricted similarity registration</b><span>align τ̂ to τ*</span></div>
+      <span class="arrow">→</span>
+      <div class="pstep final"><span class="n">TPA</span><b>4-way comparison</b><span>one objective score</span></div>
+    </div>
+
+    <div class="grid four reveal" style="margin-top:14px">
+      <div class="card"><span class="ix">SUB-SCORE 1</span><h3>Trajectory geometry</h3><p>Does the shape of the path agree?</p></div>
+      <div class="card"><span class="ix">SUB-SCORE 2</span><h3>Fitted law parameters</h3><p>Implied gravity <span class="mono">g</span>, restitution <span class="mono">e</span> — the <em>latent</em> quantities, read directly from the motion.</p></div>
+      <div class="card"><span class="ix">SUB-SCORE 3</span><h3>Kinematic profile</h3><p>Is the velocity / acceleration profile consistent?</p></div>
+      <div class="card"><span class="ix">SUB-SCORE 4</span><h3>Event timing</h3><p>Apex, impact, and contact at the right moments?</p></div>
+    </div>
+
+    <div class="props reveal">
+      <span class="prop"><b>Objective</b> — no annotator, no judge</span>
+      <span class="prop"><b>Continuous</b> — degree, not yes/no</span>
+      <span class="prop"><b>Diagnostic</b> — where &amp; how it breaks</span>
+      <span class="prop"><b>Reproducible</b> — same clip, same score</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== BENCHMARK ===================== -->
+<section id="benchmark" class="band soft">
+  <div class="container">
+    <p class="kicker reveal">The benchmark</p>
+    <h2 class="h2 reveal">Every test case is born in a simulator.</h2>
+    <p class="lead reveal">Each case is a <strong>parametric scene</strong> — a projectile launched at a chosen speed, a block released on a measured incline, two carts meeting at a fixed restitution — in which every initial condition is set explicitly, and each ships a certified-realizable prompt, the governing law, the exact reference trajectory, and a simulated counterfactual track.</p>
+
+    <div class="chips reveal">
+      <span class="chip"><b>≈10</b> physics families</span>
+      <span class="chip"><b>100s</b> parametric scenarios</span>
+      <span class="chip"><b>1000s</b> sim-anchored prompts</span>
+      <span class="chip"><b>3</b> interaction-complexity tiers</span>
+      <span class="chip"><b>+</b> counterfactual (anti-physics) track</span>
+    </div>
+
+    <div class="grid two reveal">
+      <div class="card">
+        <span class="ix">ORGANIZED BY INTERACTION COMPLEXITY</span>
+        <h3>Single-body · Multi-body · Continuum</h3>
+        <p>From projectiles, free-fall, and inclines, to collisions and momentum transfer, to continuum media — a taxonomy grouped by how objects interact.</p>
+      </div>
+      <div class="card">
+        <span class="ix">THREE PROMPT LEVELS</span>
+        <h3>Action · Consequence · Cinematic</h3>
+        <p>The same simulated scene, phrased from a bare action description up to a fully cinematic narrative — isolating how prompt style affects physical fidelity.</p>
+      </div>
+    </div>
+    <p class="small-note reveal" style="margin-top:18px">Code, scenarios, and simulators will be released. Scale figures reflect the benchmark's design.</p>
+  </div>
+</section>
+
+<!-- ===================== PARADIGMS ===================== -->
+<section id="paradigms" class="band">
+  <div class="container">
+    <p class="kicker reveal">Where PhysEval sits</p>
+    <h2 class="h2 reveal">Two paradigms for one gap.</h2>
+    <p class="lead reveal">Facing the same gap, the community has split into two paths. The <strong>perceptual / human-reasoning</strong> path (exemplified by Physion-Eval) scales expert annotation over real reference videos. The <strong>simulation-grounded</strong> path (PhysEval) builds ground truth in a physics engine and measures deviation objectively. They are complementary.</p>
+
+    <div class="tablewrap reveal">
+      <table>
+        <thead>
+          <tr>
+            <th>Dimension</th>
+            <th>Perceptual / human-reasoning<br><span class="small-note">e.g. Physion-Eval</span></th>
+            <th class="us">Simulation-grounded<br><span style="color:#dbe2ff">PhysEval</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><th>Source of truth</th><td>Real reference videos + expert annotation</td><td class="us">Exact trajectory <span class="mono">τ*</span> exported by a physics engine</td></tr>
+          <tr><th>Who judges</th><td>Humans, or trained VLM critics</td><td class="us">A deterministic algorithm — no human, no judge</td></tr>
+          <tr><th>Output</th><td>Timestamped glitches + categories + explanations (qualitative)</td><td class="us">A continuous TPA score + 4-way decomposition (quantitative)</td></tr>
+          <tr><th>What it measures</th><td>Whether a person <em>perceives</em> a glitch</td><td class="us">Whether the motion <em>obeys</em> the law — and by how much</td></tr>
+          <tr><th>Latent quantities (g, e, momentum)</th><td>Inferred only indirectly</td><td class="us">Fit directly from the trajectory</td></tr>
+          <tr><th>Reproducibility</th><td>Subject to annotator subjectivity / noise</td><td class="us">Fully deterministic — same clip, same number</td></tr>
+          <tr><th>Coverage</th><td>Real-world, multi-physics, ego + exo (broad)</td><td class="us">Physics with a single object trajectory (precise; currently narrower)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="oneliner reveal"><b>Physion-Eval scales the human eye; PhysEval takes the eye out of the loop.</b> One asks whether a person would <em>notice</em>; the other asks whether the physics is actually <em>right</em> — and by how much. Notably, it is these strongest human- and judge-based benchmarks that, with their own data, confirm the very gap an objective, law-level metric is built to close.</p>
+  </div>
+</section>
+
+<!-- ===================== ROADMAP ===================== -->
+<section id="roadmap" class="band soft">
+  <div class="container">
+    <p class="kicker reveal">North star</p>
+    <h2 class="h2 reveal">Beyond the paper.</h2>
+    <p class="lead reveal">PhysEval's paper is a starting point. The goal is to make physical correctness a standard, measurable foundation for video generation and world models.</p>
+
+    <div class="road reveal">
+      <div class="card"><span class="num">1</span><div><h3>Sim-to-real</h3><p>Bring the objective, law-level metric to real reference video — uniting the perceptual paradigm's <strong>breadth</strong> with the simulation paradigm's <strong>precision</strong>.</p></div></div>
+      <div class="card"><span class="num">2</span><div><h3>From evaluation to training signal</h3><p>TPA is continuous, decomposable, and differentiable — a <strong>physics-alignment reward</strong>. Pair categorical failure signals (<em>where</em>) with TPA (<em>how much, which way</em>).</p></div></div>
+      <div class="card"><span class="num">3</span><div><h3>Physics-domain expansion</h3><p>Fluids, articulated and soft bodies, contact-rich manipulation — toward real-world dynamical complexity.</p></div></div>
+      <div class="card"><span class="num">4</span><div><h3>A physics check-up for world models</h3><p>A standard diagnostic suite — an ImageNet/GLUE-style reference point for "does this model understand physics?"</p></div></div>
+      <div class="card"><span class="num">5</span><div><h3>A living leaderboard</h3><p>Tracking physical-realism progress across model generations over time.</p></div></div>
+      <div class="card"><span class="num">6</span><div><h3>Physical correctness as a first-class metric</h3><p>Reportable, comparable, and trackable — alongside visual quality and prompt adherence.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== RESEARCHER ===================== -->
+<section id="researcher" class="band">
+  <div class="container">
+    <p class="kicker reveal">The researcher</p>
+    <div class="who reveal">
+      <div>
+        <h2 class="name">Ray (Zerui) Wang, Ph.D.</h2>
+        <p class="role">AI Research Scientist — Evaluation · Generative &amp; Multimodal Models</p>
+        <div class="prose">
+          <p>Ray's work centers on a single question: how do we <strong>measure</strong> what generative and multimodal models actually get right — and where they fail? He earned his Ph.D. in Computer Engineering from <strong>Concordia University (2025)</strong> on explainability and adversarial robustness for video transformers, with <strong>12 peer-reviewed publications</strong> including first-author work at ICSE, ACM Transactions (TOMM), IEEE Transactions on Cloud Computing, and IEEE Access, and 40+ peer reviews for IEEE Transactions and AAAI.</p>
+          <p>His research builds <strong>evaluation infrastructure, perceptual metrics, and adversarial failure harnesses</strong> for transformer-based models across video, image, text, and audio. He designed <strong>STAA</strong> — the first single-pass spatio-temporal attention-attribution method for video transformers, defining <em>faithfulness</em> and <em>monotonicity</em> at under 150&nbsp;ms latency (a 97% reduction over prior art) so evaluation can run as CI inside the training loop. He built the <strong>first joint spatio-temporal adversarial attack</strong> on video transformers (84.6% success across 20,000 videos) and showed the same machinery, reversed, cuts model vulnerability by over 50%. And he shipped <strong>XAIport / XAIpipeline</strong>, a cloud-agnostic microservice framework that turns evaluation from a manual notebook into an automated MLOps stage — validated at 500+ evaluation pipelines.</p>
+        </div>
+      </div>
+      <div class="badges">
+        <div class="badge"><div class="b-num">Ph.D. 2025</div><div class="b-l">Computer Engineering · Concordia</div></div>
+        <div class="badge"><div class="b-num">12</div><div class="b-l">peer-reviewed publications</div></div>
+        <div class="badge"><div class="b-num">ICSE · TOMM · IEEE&nbsp;Trans</div><div class="b-l">first-author venues</div></div>
+        <div class="badge"><div class="b-num">40+</div><div class="b-l">peer reviews (IEEE Trans, AAAI)</div></div>
+      </div>
+    </div>
+
+    <!-- the fit -->
+    <h3 class="h2 reveal" style="font-size:26px;margin:48px 0 8px">Why PhysEval needs exactly this background.</h3>
+    <p class="lead reveal">PhysEval sits at an unusual <strong>four-way intersection</strong> — rigorous ML evaluation, video-transformer expertise, production 3D vision, and classical physics simulation. Ray's path runs through all four.</p>
+    <div class="grid two pillars reveal">
+      <div class="card pillar">
+        <span class="need">Need: an objective, reproducible metric</span>
+        <h3>Evaluation &amp; perceptual metrics</h3>
+        <p>PhysEval <em>is</em> a new perceptual metric. Ray's Ph.D. is exactly this — designing perceptual metrics (faithfulness, monotonicity), reproducible eval-as-CI, and benchmark harnesses across heterogeneous model backends.</p>
+      </div>
+      <div class="card pillar">
+        <span class="need">Need: understanding of video models</span>
+        <h3>Video-transformer expertise</h3>
+        <p>PhysEval evaluates video generation. Ray interpreted and red-teamed video transformers on Kinetics-400 and Something-Something&nbsp;V2, and built the first joint spatio-temporal attacks and defenses on them.</p>
+      </div>
+      <div class="card pillar">
+        <span class="need">Need: recover trajectories from clips</span>
+        <h3>3D vision — segmentation, tracking, reconstruction</h3>
+        <p>TPA recovers motion via promptable segmentation + camera-compensated point tracking. Ray ships <strong>SAM3D</strong> segmentation and Gaussian&nbsp;Splatting&nbsp;/&nbsp;NeRF reconstruction from phone video in production at Maket.AI.</p>
+      </div>
+      <div class="card pillar">
+        <span class="need">Need: ground truth born in a simulator</span>
+        <h3>Physics simulation &amp; numerical methods</h3>
+        <p>PhysEval's reference trajectories come from a physics engine. Ray built multi-physics and fluid-transport simulations and implemented finite-volume, finite-element, Runge–Kutta, and spectral solvers for Navier–Stokes and advection–diffusion (Université de Montréal; M.Sc. Process Systems Engineering, TU Dortmund). He can author the scenes, run the engines, and fit the governing laws.</p>
+      </div>
+    </div>
+
+    <!-- experience -->
+    <h3 class="h2 reveal" style="font-size:26px;margin:48px 0 6px">Experience</h3>
+    <ul class="timeline reveal">
+      <li><div class="when">Aug 2025 — Present</div><div class="what"><b>Generative AI Engineer · <span class="org">Maket.AI</span></b><p>Production multimodal generation pipelines; SAM3D segmentation and Gaussian Splatting / NeRF reconstruction from phone video; real-time multimodal AI chat driving iterative design loops.</p></div></li>
+      <li><div class="when">2020 — 2025</div><div class="what"><b>Doctoral Researcher · <span class="org">Concordia University</span></b><p>XAI, perceptual metrics, adversarial evaluation, and MLOps for video transformers. STAA (IEEE Access 2025); adversarial attack/defense (ACM TOMM 2025); XAIport (ICSE 2024); multi-cloud benchmarking (IEEE TCC 2024).</p></div></li>
+      <li><div class="when">2023 — 2025</div><div class="what"><b>AI Engineer · <span class="org">Quantum</span></b><p>LLM research pipelines; reused his XAI evaluation framework to score startup defensibility along data-moat, representation, retrieval, evaluation-rigor, and monitoring axes.</p></div></li>
+      <li><div class="when">2023</div><div class="what"><b>AI Engineer (Contract) · <span class="org">IntelliPro Group</span></b><p>LLM fine-tuning for candidate–job matching; NLP automation suite (semantic search, summarization).</p></div></li>
+      <li><div class="when">2019 — 2021</div><div class="what"><b>Research Associate · <span class="org">Université de Montréal</span></b><p>Numerical simulation and dynamical-systems modeling — fluid transport, multi-physics coupling; PDE solvers (Navier–Stokes, advection–diffusion) in Python / MATLAB / COMSOL, validated against analytical benchmarks.</p></div></li>
+    </ul>
+
+    <!-- publications -->
+    <h3 class="h2 reveal" style="font-size:26px;margin:48px 0 6px">Selected publications</h3>
+    <ul class="pubs reveal">
+      <li><b>Wang, Z.</b>, Liu, Y. “STAA: Spatio-Temporal Attention Attribution for Real-Time Interpreting Transformer-Based Video Models.” <span class="venue">IEEE Access</span>, vol. 13, 2025.</li>
+      <li><b>Wang, Z.</b>, Liu, Y. “Joint Spatio-temporal Adversarial Attacks on Video Transformer Models Through XAI-guided Gradient Perturbation.” <span class="venue">ACM Transactions on Multimedia Computing, Communications, and Applications (TOMM)</span>, 2025.</li>
+      <li><b>Wang, Z.</b>, Liu, Y., Huang, J. “An Open API Architecture to Discover the Trustworthy Explanation of Cloud AI Services.” <span class="venue">IEEE Transactions on Cloud Computing</span>, vol. 12(2), 2024.</li>
+      <li><b>Wang, Z.</b>, Liu, Y., et al. “XAIport: A Service Framework for the Early Adoption of XAI in AI Model Development.” <span class="venue">IEEE/ACM ICSE</span>, Lisbon, 2024.</li>
+      <li><b>Wang, Z.</b>, Liu, Y. “XAIpipeline: Automated Orchestration of Explainable AI Service for Cloud AI and Open-Source Models.” <span class="venue">IEEE SSE</span>, 2025.</li>
+      <li>Kondal, A.S., et al., <b>Wang, Z.</b> “VideoXAI: A Hybrid Architecture for Explainable AI Pipelines of Robust Video Classification.” <span class="venue">IEEE Big Data</span>, 2025.</li>
+    </ul>
+    <p class="small-note reveal" style="margin-top:12px">Full list of 12 publications on <a href="https://scholar.google.com/citations?user=QQpnwdoAAAAJ&hl=en">Google Scholar</a>.</p>
+
+    <!-- education -->
+    <h3 class="h2 reveal" style="font-size:26px;margin:48px 0 6px">Education</h3>
+    <div class="edu reveal">
+      <div class="card"><div class="deg">Ph.D., Computer Engineering</div><div class="sch">Concordia University</div><div class="yr">2020 — 2025</div><p style="margin:8px 0 0;font-size:13.5px;color:var(--ink-soft)">Explainability &amp; adversarial robustness for video transformers.</p></div>
+      <div class="card"><div class="deg">M.Sc., Process Systems Engineering</div><div class="sch">Technical University Dortmund</div><div class="yr">2014 — 2018</div><p style="margin:8px 0 0;font-size:13.5px;color:var(--ink-soft)">Modeling, PDEs, control theory, computational simulation.</p></div>
+      <div class="card"><div class="deg">B.Sc., Chemical Engineering</div><div class="sch">China University of Mining and Technology</div><div class="yr">2010 — 2014</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== CONTACT ===================== -->
+<section id="contact" class="band contact">
+  <div class="hero-dots" aria-hidden="true"></div>
+  <div class="container" style="position:relative">
+    <p class="kicker reveal">Get in touch</p>
+    <h2 class="reveal">Let's make physical correctness measurable.</h2>
+    <p class="lead reveal">I'm joining industry as a Research Scientist to build exactly this — objective, trajectory-level evaluation of physical realism, and the training signals that follow from it. If you're working on video generation, world models, or evaluation, I'd love to talk.</p>
+
+    <div class="contact-grid reveal">
+      <a class="cc" href="mailto:xaiport@gmail.com">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span>
+        <span><span class="l">Email</span><br><span class="v">xaiport@gmail.com</span></span>
+      </a>
+      <a class="cc" href="tel:+12633828882">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z"/></svg></span>
+        <span><span class="l">Phone</span><br><span class="v">+1 263 382 8882</span></span>
+      </a>
+      <div class="cc" style="cursor:default">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span>
+        <span><span class="l">Location</span><br><span class="v">San Jose, CA</span></span>
+      </div>
+      <a class="cc" href="https://www.linkedin.com/in/zerui/">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.98 3.5A2.5 2.5 0 1 0 5 8.5a2.5 2.5 0 0 0 0-5ZM3 9h4v12H3V9Zm6 0h3.8v1.7h.05c.53-.95 1.83-1.95 3.77-1.95C20.4 8.75 22 10.6 22 14v7h-4v-6.2c0-1.5 0-3.4-2.07-3.4-2.07 0-2.39 1.6-2.39 3.3V21H9V9Z"/></svg></span>
+        <span><span class="l">LinkedIn</span><br><span class="v">in/zerui</span></span>
+      </a>
+      <a class="cc" href="https://scholar.google.com/citations?user=QQpnwdoAAAAJ&hl=en">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 1 9l11 7 9-5.7V17h2V9L12 2Z"/><path d="M5 13.2V17c0 1.7 3.1 3 7 3s7-1.3 7-3v-3.8l-7 4.4-7-4.4Z"/></svg></span>
+        <span><span class="l">Google Scholar</span><br><span class="v">12 publications</span></span>
+      </a>
+      <a class="cc" href="https://github.com/ZeruiW">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.36 1.09 2.93.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg></span>
+        <span><span class="l">GitHub</span><br><span class="v">@ZeruiW</span></span>
+      </a>
+    </div>
+
+    <a class="cc" href="https://xaiport.com/" style="max-width:760px;margin-top:14px">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z"/></svg></span>
+      <span><span class="l">Website</span><br><span class="v">xaiport.com</span></span>
+    </a>
+
+    <div class="avail reveal"><span class="dot"></span> Open to Research Scientist roles — evaluation, physical realism, and world models.</div>
+  </div>
+</section>
+
+<footer>
+  <div class="container foot-inner">
+    <div>© 2026 Ray (Zerui) Wang · <strong style="color:#dbe2ff">PhysEval</strong> — Simulation-Grounded Evaluation of Physical Realism in Video Generation.</div>
+    <div class="foot-links">
+      <a href="mailto:xaiport@gmail.com">Email</a>
+      <a href="https://scholar.google.com/citations?user=QQpnwdoAAAAJ&hl=en">Scholar</a>
+      <a href="https://github.com/ZeruiW">GitHub</a>
+      <a href="https://www.linkedin.com/in/zerui/">LinkedIn</a>
+      <a href="https://xaiport.com/">xaiport.com</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // reveal-on-scroll
+  (function(){
+    var els = document.querySelectorAll('.reveal');
+    if(!('IntersectionObserver' in window)){els.forEach(function(e){e.classList.add('in')});return;}
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){ if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); } });
+    },{rootMargin:'0px 0px -8% 0px',threshold:.08});
+    els.forEach(function(e){io.observe(e)});
+  })();
+
+  // active nav link
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('.nav-links a'));
+    var map = {};
+    links.forEach(function(a){ var id=a.getAttribute('href').slice(1); var s=document.getElementById(id); if(s) map[id]=a; });
+    var secs = Object.keys(map).map(function(id){return document.getElementById(id)});
+    if(!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){
+          links.forEach(function(a){a.classList.remove('active')});
+          var a = map[en.target.id]; if(a) a.classList.add('active');
+        }
+      });
+    },{rootMargin:'-45% 0px -50% 0px',threshold:0});
+    secs.forEach(function(s){io.observe(s)});
+  })();
+</script>
+</body>
+</html>
